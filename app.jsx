@@ -68,18 +68,19 @@ const cellSt = {
 
 // Default table setup
 const INIT_COLS = [
-  { id:"c1", label:"Item"         },
-  { id:"c2", label:"Description"  },
-  { id:"c3", label:"Colour"       },
-  { id:"c4", label:"Size"         },
-  { id:"c5", label:"Qty"          },
+  { id:"c1", label:"Model"           },
+  { id:"c2", label:"Qty"             },
+  { id:"c3", label:"Socket(s) left"  },
+  { id:"c4", label:"Socket(s) right" },
+  { id:"c5", label:"Water"           },
+  { id:"c6", label:"Technology"      },
+  { id:"c7", label:"Locking"         },
 ];
 const INIT_ROWS = [
-  { id:"r1", c1:"Polo Shirt", c2:"Left chest embroidery — standard logo", c3:"Navy",  c4:"M/L/XL mix", c5:"80" },
-  { id:"r2", c1:"Polo Shirt", c2:"Left chest embroidery — standard logo", c3:"White", c4:"M/L/XL mix", c5:"70" },
+  { id:"r1", c1:"", c2:"", c3:"", c4:"", c5:"", c6:"", c7:"" },
 ];
 
-let _cid = 6, _rid = 3;
+let _cid = 8, _rid = 2;
 
 function DesignApproval() {
   // ── PIN gate for builder ─────────────────────────────────────────────────
@@ -110,7 +111,7 @@ function DesignApproval() {
   const [cols, setCols]       = useState(preloaded ? preloaded.cols : INIT_COLS);
   const [rows, setRows]       = useState(preloaded ? preloaded.rows : INIT_ROWS);
   const [editCol, setEditCol] = useState(null);
-  const [sumCols, setSumCols] = useState(preloaded ? new Set(preloaded.sumCols || ["c5"]) : new Set(["c5"]));
+  const [sumCols, setSumCols] = useState(preloaded ? new Set(preloaded.sumCols || ["c2"]) : new Set(["c2"]));
 
   const toggleSum = id => setSumCols(prev => {
     const next = new Set(prev);
@@ -141,6 +142,7 @@ function DesignApproval() {
   // ── Sign step ────────────────────────────────────────────────────────────
   const [name, setName]         = useState("");
   const [jobTitle, setJobTitle] = useState("");
+  const [email, setEmail]       = useState("");
   const [checked, setChecked]   = useState(false);
   const [hasDrawn, setHasDrawn] = useState(false);
   const [isDrawing, setIsDrawing] = useState(false);
@@ -179,6 +181,7 @@ function DesignApproval() {
   const submit = async () => {
     setError("");
     if (!name.trim()) { setError("Please enter your full name."); return; }
+    if (!email.trim() || !email.includes("@")) { setError("Please enter a valid email address."); return; }
     if (!checked)     { setError("Please tick the confirmation box."); return; }
     if (!hasDrawn)    { setError("Please draw your signature in the box above."); return; }
     setSubmitting(true);
@@ -190,6 +193,7 @@ function DesignApproval() {
           headers: { "Accept": "application/json", "Content-Type": "application/json" },
           body: JSON.stringify({
             orderRef, customer, contactName,
+            email,
             approvedBy: name,
             jobTitle: jobTitle || "—",
             timestamp: ts,
@@ -477,16 +481,6 @@ function DesignApproval() {
             </div>
           </div>
 
-          {/* Optional notes */}
-          <div style={{ background:"#fff", border:`1px solid ${brand.border}`, borderRadius:6, padding:20, marginBottom:20, boxShadow:"0 2px 10px rgba(0,114,187,0.06)" }}>
-            <label style={{ display:"block", fontSize:12, letterSpacing:"0.1em", color:brand.blue, fontWeight:700, marginBottom:10 }}>
-              ADDITIONAL NOTES <span style={{ color:brand.textLight, fontWeight:400, fontSize:11, letterSpacing:0 }}>(optional — shown to customer)</span>
-            </label>
-            <textarea value={notes} onChange={e => setNotes(e.target.value)}
-              placeholder="e.g. artwork file reference, placement instructions, special requirements…"
-              rows={3} style={{ ...inputSt, resize:"vertical", lineHeight:1.6 }} />
-          </div>
-
           {/* Delivery details */}
           <div style={{ background:"#fff", border:`1px solid ${brand.border}`, borderRadius:6, padding:20, marginBottom:20, boxShadow:"0 2px 10px rgba(0,114,187,0.06)" }}>
             <label style={{ display:"block", fontSize:12, letterSpacing:"0.1em", color:brand.blue, fontWeight:700, marginBottom:10 }}>
@@ -494,6 +488,16 @@ function DesignApproval() {
             </label>
             <textarea value={delivery} onChange={e => setDelivery(e.target.value)}
               placeholder="e.g. delivery address, estimated lead time, freight instructions…"
+              rows={3} style={{ ...inputSt, resize:"vertical", lineHeight:1.6 }} />
+          </div>
+
+          {/* Optional notes */}
+          <div style={{ background:"#fff", border:`1px solid ${brand.border}`, borderRadius:6, padding:20, marginBottom:20, boxShadow:"0 2px 10px rgba(0,114,187,0.06)" }}>
+            <label style={{ display:"block", fontSize:12, letterSpacing:"0.1em", color:brand.blue, fontWeight:700, marginBottom:10 }}>
+              ADDITIONAL NOTES <span style={{ color:brand.textLight, fontWeight:400, fontSize:11, letterSpacing:0 }}>(optional — shown to customer)</span>
+            </label>
+            <textarea value={notes} onChange={e => setNotes(e.target.value)}
+              placeholder="e.g. artwork file reference, placement instructions, special requirements…"
               rows={3} style={{ ...inputSt, resize:"vertical", lineHeight:1.6 }} />
           </div>
 
@@ -663,9 +667,13 @@ function DesignApproval() {
                 <label style={{ display:"block", fontSize:11, letterSpacing:"0.1em", color:brand.blue, marginBottom:8, fontWeight:700 }}>FULL NAME *</label>
                 <input value={name} onChange={e => setName(e.target.value)} placeholder="Enter your full name" style={{ ...inputSt, fontSize:15 }} />
               </div>
-              <div>
+              <div style={{ marginTop:16 }}>
                 <label style={{ display:"block", fontSize:11, letterSpacing:"0.1em", color:brand.blue, marginBottom:8, fontWeight:700 }}>JOB TITLE <span style={{ color:brand.textLight, fontWeight:400 }}>(optional)</span></label>
                 <input value={jobTitle} onChange={e => setJobTitle(e.target.value)} placeholder="e.g. Operations Manager" style={{ ...inputSt, fontSize:15 }} />
+              </div>
+              <div style={{ marginTop:16 }}>
+                <label style={{ display:"block", fontSize:11, letterSpacing:"0.1em", color:brand.blue, marginBottom:8, fontWeight:700 }}>EMAIL ADDRESS * <span style={{ color:brand.textLight, fontWeight:400, fontSize:10 }}>(a confirmation copy will be sent to you)</span></label>
+                <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="e.g. james@westhavenmarina.co.nz" style={{ ...inputSt, fontSize:15 }} />
               </div>
             </div>
 
@@ -731,6 +739,7 @@ function DesignApproval() {
                 { label:"Reference",   value:orderRef },
                 { label:"Approved by", value:`${name}${jobTitle?` — ${jobTitle}`:""}` },
                 { label:"Company",     value:customer },
+                { label:"Email",       value:email },
                 { label:"Timestamp",   value:timestamp },
               ].map((r,i,arr) => (
                 <div key={i} style={{ padding:"11px 20px", borderBottom:i<arr.length-1?`1px solid ${brand.border}`:"none", display:"flex", justifyContent:"space-between", gap:16 }}>
@@ -739,10 +748,14 @@ function DesignApproval() {
                 </div>
               ))}
             </div>
+            <button onClick={() => window.print()}
+              style={{ width:"100%", padding:"14px 20px", background:"#fff", color:brand.navy, border:`1.5px solid ${brand.border}`, borderRadius:6, fontSize:14, fontWeight:600, cursor:"pointer", marginBottom:16, display:"flex", alignItems:"center", justifyContent:"center", gap:10 }}>
+              <span>🖨️</span> Download / Print Confirmation
+            </button>
             <div style={{ background:brand.blueLight, border:`1px solid ${brand.border}`, borderRadius:6, padding:"16px 20px", display:"flex", gap:14, alignItems:"flex-start", textAlign:"left" }}>
               <span style={{ fontSize:18 }}>📧</span>
               <div style={{ fontSize:13, color:brand.textMid, fontFamily:"sans-serif", lineHeight:1.6 }}>
-                A copy of this approval has been sent to your email. Questions? Contact{" "}
+                A copy of this confirmation will be sent to <strong>{email}</strong>. Questions? Contact{" "}
                 <a href="mailto:sales@tallykey.co.nz" style={{color:brand.blue}}>sales@tallykey.co.nz</a> or{" "}
                 <a href="tel:0800825595" style={{color:brand.blue}}>0800 82 55 95</a>.
               </div>

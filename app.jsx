@@ -87,20 +87,30 @@ function DesignApproval() {
   const [pinInput, setPinInput]       = useState("");
   const [pinError, setPinError]       = useState(false);
 
-  // Read ?builder=1 from URL to show PIN prompt
+  // Read URL params
   const urlParams = new URLSearchParams(window.location.search);
   const wantsBuilder = urlParams.get("builder") === "1";
 
+  // Decode order data from ?order= param if present
+  const decodeOrder = () => {
+    try {
+      const raw = urlParams.get("order");
+      if (!raw) return null;
+      return JSON.parse(decodeURIComponent(atob(raw)));
+    } catch(e) { return null; }
+  };
+  const preloaded = decodeOrder();
+
   // ── Modes ────────────────────────────────────────────────────────────────
-  // Customers always land on preview; you access builder via ?builder=1 + PIN
   const [mode, setMode] = useState("preview");
   const [step, setStep] = useState(1);
+  const [linkCopied, setLinkCopied] = useState(false);
 
   // ── Table data ───────────────────────────────────────────────────────────
-  const [cols, setCols]       = useState(INIT_COLS);
-  const [rows, setRows]       = useState(INIT_ROWS);
-  const [editCol, setEditCol] = useState(null);       // col id being renamed
-  const [sumCols, setSumCols] = useState(new Set(["c5"])); // col ids to sum
+  const [cols, setCols]       = useState(preloaded ? preloaded.cols : INIT_COLS);
+  const [rows, setRows]       = useState(preloaded ? preloaded.rows : INIT_ROWS);
+  const [editCol, setEditCol] = useState(null);
+  const [sumCols, setSumCols] = useState(preloaded ? new Set(preloaded.sumCols || ["c5"]) : new Set(["c5"]));
 
   const toggleSum = id => setSumCols(prev => {
     const next = new Set(prev);
@@ -122,11 +132,11 @@ function DesignApproval() {
   const hasTotals = Object.keys(colTotals).length > 0;
 
   // ── Order metadata ───────────────────────────────────────────────────────
-  const [orderRef, setOrderRef]       = useState("MPL-2026-0847");
-  const [customer, setCustomer]       = useState("Tally Key Limited");
-  const [contactName, setContactName] = useState("James Whitfield");
-  const [notes, setNotes]             = useState("");
-  const [delivery, setDelivery]       = useState("");
+  const [orderRef, setOrderRef]       = useState(preloaded ? preloaded.orderRef    : "MPL-2026-0847");
+  const [customer, setCustomer]       = useState(preloaded ? preloaded.customer    : "Tally Key Limited");
+  const [contactName, setContactName] = useState(preloaded ? preloaded.contactName : "James Whitfield");
+  const [notes, setNotes]             = useState(preloaded ? preloaded.notes       : "");
+  const [delivery, setDelivery]       = useState(preloaded ? preloaded.delivery    : "");
 
   // ── Sign step ────────────────────────────────────────────────────────────
   const [name, setName]         = useState("");
@@ -202,6 +212,20 @@ function DesignApproval() {
 
   const resetPreview = () => { setMode("preview"); setStep(1); setName(""); setJobTitle(""); setChecked(false); setHasDrawn(false); setError(""); };
 
+  const generateLink = () => {
+    const data = { orderRef, customer, contactName, notes, delivery, cols, rows, sumCols: [...sumCols] };
+    const encoded = btoa(encodeURIComponent(JSON.stringify(data)));
+    const base = window.location.origin + window.location.pathname;
+    return `${base}?order=${encoded}`;
+  };
+
+  const copyLink = () => {
+    navigator.clipboard.writeText(generateLink()).then(() => {
+      setLinkCopied(true);
+      setTimeout(() => setLinkCopied(false), 3000);
+    });
+  };
+
   // ═══════════════════════════════════════════════════════════════════════════
   // ── PIN gate screen ────────────────────────────────────────────────────
   if (wantsBuilder && !pinUnlocked) {
@@ -245,10 +269,16 @@ function DesignApproval() {
               <div style={{ fontSize:13, color:"rgba(255,255,255,0.8)", fontFamily:"sans-serif" }}>Configure your approval form</div>
             </div>
           </div>
-          <button onClick={() => setMode("preview")}
-            style={{ padding:"10px 22px", background:brand.blue, color:"#fff", border:"none", borderRadius:6, fontSize:13, fontWeight:700, letterSpacing:"0.06em", cursor:"pointer", boxShadow:`0 3px 12px rgba(0,114,187,0.4)` }}>
-            PREVIEW AS CUSTOMER →
-          </button>
+          <div style={{ display:"flex", gap:10, alignItems:"center" }}>
+            <button onClick={copyLink}
+              style={{ padding:"10px 20px", background: linkCopied ? brand.success : "rgba(255,255,255,0.15)", color:"#fff", border:"1px solid rgba(255,255,255,0.3)", borderRadius:6, fontSize:13, fontWeight:600, cursor:"pointer", transition:"all 0.2s" }}>
+              {linkCopied ? "✓ Link copied!" : "📋 Copy customer link"}
+            </button>
+            <button onClick={() => setMode("preview")}
+              style={{ padding:"10px 22px", background:brand.blue, color:"#fff", border:"none", borderRadius:6, fontSize:13, fontWeight:700, letterSpacing:"0.06em", cursor:"pointer", boxShadow:`0 3px 12px rgba(0,114,187,0.4)` }}>
+              PREVIEW AS CUSTOMER →
+            </button>
+          </div>
         </div>
         <div style={{ height:4, background:`linear-gradient(90deg,${brand.blue},${brand.gold})` }} />
 

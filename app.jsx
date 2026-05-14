@@ -220,55 +220,29 @@ function DesignApproval() {
     const ts = new Date().toLocaleString("en-NZ", { timeZone:"Pacific/Auckland", dateStyle:"long", timeStyle:"short" });
     if (FORMSPREE_URL) {
       try {
-        const tableRows = rows.map(row =>
-          `<tr>${cols.map(col => `<td style="padding:8px 12px;border-bottom:1px solid #D8D9E8;font-size:14px;color:#1A1C3E">${row[col.id]||'—'}</td>`).join('')}</tr>`
-        ).join('');
-        const tableHead = cols.map(col =>
-          `<th style="padding:9px 12px;background:#2C2E69;color:#fff;text-align:left;font-size:12px;letter-spacing:0.06em;white-space:nowrap">${col.label.toUpperCase()}</th>`
-        ).join('');
-        const message = `
-<div style="font-family:Arial,sans-serif;max-width:700px;margin:0 auto">
-  <div style="background:#2C2E69;padding:20px 28px;border-radius:6px 6px 0 0">
-    <div style="color:#fff;font-size:22px;font-weight:700">TallyKey</div>
-    <div style="color:rgba(255,255,255,0.6);font-size:13px;margin-top:4px">Order Confirmation — Sign-off Received</div>
-  </div>
-  <div style="background:#fff;border:1px solid #D8D9E8;border-top:none;padding:24px 28px;border-radius:0 0 6px 6px">
-
-    <table style="width:100%;border-collapse:collapse;margin-bottom:20px">
-      <tr><td style="padding:6px 0;color:#8A8CAE;font-size:13px;width:140px">Order Reference</td><td style="padding:6px 0;font-size:14px;font-weight:600;color:#1A1C3E">${orderRef}</td></tr>
-      <tr><td style="padding:6px 0;color:#8A8CAE;font-size:13px">Company</td><td style="padding:6px 0;font-size:14px;color:#1A1C3E">${customer}</td></tr>
-      <tr><td style="padding:6px 0;color:#8A8CAE;font-size:13px">Contact</td><td style="padding:6px 0;font-size:14px;color:#1A1C3E">${contactName}</td></tr>
-      <tr><td style="padding:6px 0;color:#8A8CAE;font-size:13px">Approved by</td><td style="padding:6px 0;font-size:14px;color:#1A1C3E">${name}${jobTitle ? ' — ' + jobTitle : ''}</td></tr>
-      <tr><td style="padding:6px 0;color:#8A8CAE;font-size:13px">Email</td><td style="padding:6px 0;font-size:14px;color:#1A1C3E">${email}</td></tr>
-      <tr><td style="padding:6px 0;color:#8A8CAE;font-size:13px">Submitted</td><td style="padding:6px 0;font-size:14px;color:#1A1C3E">${ts}</td></tr>
-    </table>
-
-    <div style="font-size:11px;font-weight:700;color:#2C2E69;letter-spacing:0.1em;margin-bottom:10px">PEDESTAL CONFIGURATION</div>
-    <table style="width:100%;border-collapse:collapse;border:1px solid #D8D9E8;margin-bottom:20px">
-      <thead><tr>${tableHead}</tr></thead>
-      <tbody>${tableRows}</tbody>
-    </table>
-
-    ${delivery ? `<div style="margin-bottom:16px"><div style="font-size:11px;font-weight:700;color:#2C2E69;letter-spacing:0.1em;margin-bottom:6px">DELIVERY DETAILS</div><div style="font-size:14px;color:#4A4C6E;line-height:1.6;white-space:pre-wrap">${delivery}</div></div>` : ''}
-    ${notes ? `<div style="margin-bottom:16px"><div style="font-size:11px;font-weight:700;color:#2C2E69;letter-spacing:0.1em;margin-bottom:6px">ADDITIONAL NOTES</div><div style="font-size:14px;color:#4A4C6E;line-height:1.6;white-space:pre-wrap">${notes}</div></div>` : ''}
-
-    <div style="background:#F7F8FB;border:1px solid #D8D9E8;border-radius:4px;padding:14px 16px;font-size:12px;color:#4A4C6E;line-height:1.7;margin-top:8px">
-      <strong>Sign-off confirmation:</strong> The customer confirmed the pedestal configuration is correct and accepted the terms and conditions at www.tallykey.co.nz/terms.
-    </div>
-
-    <div style="margin-top:24px;padding-top:16px;border-top:1px solid #D8D9E8;font-size:12px;color:#8A8CAE;text-align:center">
-      Marathon Products Limited &nbsp;·&nbsp; sales@tallykey.co.nz &nbsp;·&nbsp; 0800 82 55 95
-    </div>
-  </div>
-</div>`;
+        // Build one field per pedestal row so Formspree displays them cleanly
+        const rowFields = {};
+        rows.forEach((row, ri) => {
+          const label = `Pedestal ${ri + 1}`;
+          const value = cols.map(col => `${col.label}: ${row[col.id] || '—'}`).join('  |  ');
+          rowFields[label] = value;
+        });
 
         await fetch(FORMSPREE_URL, {
           method: "POST",
           headers: { "Accept": "application/json", "Content-Type": "application/json" },
           body: JSON.stringify({
             _subject: `TallyKey Sign-off: ${orderRef} — ${customer}`,
-            message,
-            orderRef, customer, email,
+            "Order Reference":  orderRef,
+            "Company":          customer,
+            "Contact Name":     contactName,
+            "Approved By":      `${name}${jobTitle ? ' — ' + jobTitle : ''}`,
+            "Email":            email,
+            "Submitted":        ts,
+            ...rowFields,
+            "Delivery Details": delivery || "—",
+            "Additional Notes": notes || "—",
+            "Sign-off":         "Customer confirmed configuration is correct and accepted T&C at www.tallykey.co.nz/terms",
           }),
         });
       } catch (_) { /* fail silently */ }

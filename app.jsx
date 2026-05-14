@@ -92,12 +92,44 @@ function DesignApproval() {
   const urlParams = new URLSearchParams(window.location.search);
   const wantsBuilder = urlParams.get("builder") === "1";
 
-  // Decode order data from ?order= param if present
+  // Decode order data from ?o= param
   const decodeOrder = () => {
     try {
-      const raw = urlParams.get("order");
+      const raw = urlParams.get("o") || urlParams.get("order");
       if (!raw) return null;
-      return JSON.parse(decodeURIComponent(atob(raw)));
+      const data = JSON.parse(decodeURIComponent(escape(atob(raw))));
+      if (data.r !== undefined && data.rw && Array.isArray(data.rw[0])) {
+        // Compact format — rows are arrays of values, rebuild using default cols
+        const builtRows = data.rw.map((vals, ri) => {
+          const row = { id: `r${ri+1}` };
+          INIT_COLS.forEach((col, ci) => { row[col.id] = vals[ci] || ""; });
+          return row;
+        });
+        return {
+          orderRef:    data.r,
+          customer:    data.cu,
+          contactName: data.cn,
+          notes:       data.n || "",
+          delivery:    data.d || "",
+          cols:        INIT_COLS,
+          rows:        builtRows,
+          sumCols:     ["c2"],
+        };
+      }
+      // Legacy format fallback
+      if (data.r !== undefined) {
+        return {
+          orderRef:    data.r,
+          customer:    data.cu,
+          contactName: data.cn,
+          notes:       data.n || "",
+          delivery:    data.d || "",
+          cols:        data.c ? data.c.map(col => ({ id: col.i, label: col.l })) : INIT_COLS,
+          rows:        data.rw || [],
+          sumCols:     data.s || ["c2"],
+        };
+      }
+      return data;
     } catch(e) { return null; }
   };
   const preloaded = decodeOrder();
@@ -217,24 +249,26 @@ function DesignApproval() {
   const resetPreview = () => { setMode("preview"); setStep(1); setName(""); setJobTitle(""); setChecked(false); setHasDrawn(false); setError(""); };
 
   const generateLink = () => {
-    const data = { orderRef, customer, contactName, notes, delivery, cols, rows, sumCols: [...sumCols] };
-    const encoded = btoa(encodeURIComponent(JSON.stringify(data)));
+    // Only encode the data that changes per order — not the fixed column structure
+    const data = {
+      r: orderRef,
+      cu: customer,
+      cn: contactName,
+      n: notes,
+      d: delivery,
+      // Rows as arrays of values (in col order) to minimise size
+      rw: rows.map(row => cols.map(col => row[col.id] || "")),
+    };
+    const encoded = btoa(unescape(encodeURIComponent(JSON.stringify(data))));
     const base = window.location.origin + window.location.pathname;
-    return `${base}?order=${encoded}`;
+    return `${base}?o=${encoded}`;
   };
 
-  const copyLink = async () => {
-    const longUrl = generateLink();
-    try {
-      const res = await fetch(`https://tinyurl.com/api-create.php?url=${encodeURIComponent(longUrl)}`);
-      const shortUrl = await res.text();
-      await navigator.clipboard.writeText(shortUrl.trim());
-    } catch(e) {
-      // Fall back to long URL if TinyURL fails
-      await navigator.clipboard.writeText(longUrl);
-    }
-    setLinkCopied(true);
-    setTimeout(() => setLinkCopied(false), 3000);
+  const copyLink = () => {
+    navigator.clipboard.writeText(generateLink()).then(() => {
+      setLinkCopied(true);
+      setTimeout(() => setLinkCopied(false), 3000);
+    });
   };
 
   // ── Column operations ─────────────────────────────────────────────────────
@@ -679,7 +713,7 @@ function DesignApproval() {
                 <input value={jobTitle} onChange={e => setJobTitle(e.target.value)} placeholder="e.g. Operations Manager" style={{ ...inputSt, fontSize:15 }} />
               </div>
               <div style={{ marginTop:16 }}>
-                <label style={{ display:"block", fontSize:11, letterSpacing:"0.1em", color:brand.blue, marginBottom:8, fontWeight:700 }}>EMAIL ADDRESS * <span style={{ color:brand.textLight, fontWeight:400, fontSize:10 }}>(a confirmation copy will be sent to you)</span></label>
+                <label style={{ display:"block", fontSize:11, letterSpacing:"0.1em", color:brand.blue, marginBottom:8, fontWeight:700 }}>EMAIL ADDRESS *</label>
                 <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="e.g. james@westhavenmarina.co.nz" style={{ ...inputSt, fontSize:15 }} />
               </div>
             </div>
@@ -810,7 +844,7 @@ function DesignApproval() {
             <div style={{ background:brand.blueLight, border:`1px solid ${brand.border}`, borderRadius:6, padding:"16px 20px", display:"flex", gap:14, alignItems:"flex-start", textAlign:"left" }}>
               <span style={{ fontSize:18 }}>📧</span>
               <div style={{ fontSize:13, color:brand.textMid, fontFamily:"sans-serif", lineHeight:1.6 }}>
-                A copy of this confirmation will be sent to <strong>{email}</strong>. Questions? Contact{" "}
+                Questions? Contact{" "}
                 <a href="mailto:sales@tallykey.co.nz" style={{color:brand.blue}}>sales@tallykey.co.nz</a> or{" "}
                 <a href="tel:0800825595" style={{color:brand.blue}}>0800 82 55 95</a>.
               </div>

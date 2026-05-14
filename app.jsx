@@ -165,9 +165,9 @@ function DesignApproval() {
   const hasTotals = Object.keys(colTotals).length > 0;
 
   // ── Order metadata ───────────────────────────────────────────────────────
-  const [orderRef, setOrderRef]       = useState(preloaded ? preloaded.orderRef    : "MPL-2026-0847");
-  const [customer, setCustomer]       = useState(preloaded ? preloaded.customer    : "Tally Key Limited");
-  const [contactName, setContactName] = useState(preloaded ? preloaded.contactName : "James Whitfield");
+  const [orderRef, setOrderRef]       = useState(preloaded ? preloaded.orderRef    : "");
+  const [customer, setCustomer]       = useState(preloaded ? preloaded.customer    : "");
+  const [contactName, setContactName] = useState(preloaded ? preloaded.contactName : "");
   const [notes, setNotes]             = useState(preloaded ? preloaded.notes       : "");
   const [delivery, setDelivery]       = useState(preloaded ? preloaded.delivery    : "");
 
@@ -368,7 +368,7 @@ function DesignApproval() {
             <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:14 }}>
               {[
                 { label:"Order Reference",    val:orderRef,    set:setOrderRef    },
-                { label:"Customer / Company", val:customer,    set:setCustomer    },
+                { label:"Company",            val:customer,    set:setCustomer    },
                 { label:"Contact Name",       val:contactName, set:setContactName },
               ].map(f => (
                 <div key={f.label}>

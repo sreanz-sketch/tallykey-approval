@@ -226,6 +226,39 @@ function DesignApproval() {
     });
   };
 
+  // ── Column operations ─────────────────────────────────────────────────────
+  const addCol = () => {
+    const id = `c${_cid++}`;
+    setCols(c => [...c, { id, label:"New column" }]);
+    setRows(r => r.map(row => ({ ...row, [id]:"" })));
+  };
+  const delCol = id => {
+    setCols(c => c.filter(x => x.id !== id));
+    setRows(r => r.map(row => { const copy={...row}; delete copy[id]; return copy; }));
+  };
+  const moveCol = (id, dir) => setCols(c => {
+    const i = c.findIndex(x => x.id===id), j = i+dir;
+    if (j<0||j>=c.length) return c;
+    const a=[...c]; [a[i],a[j]]=[a[j],a[i]]; return a;
+  });
+  const renameCol = (id, label) => setCols(c => c.map(x => x.id===id ? {...x,label} : x));
+
+  // ── Row operations ────────────────────────────────────────────────────────
+  const addRow = () => {
+    const id = `r${_rid++}`;
+    const blank = { id }; cols.forEach(c => { blank[c.id]=""; });
+    setRows(r => [...r, blank]);
+  };
+  const dupRow = rowId => {
+    const id = `r${_rid++}`;
+    const src = rows.find(r => r.id===rowId);
+    const copy = {...src, id};
+    const idx = rows.findIndex(r => r.id===rowId);
+    setRows(r => [...r.slice(0,idx+1), copy, ...r.slice(idx+1)]);
+  };
+  const delRow = id => setRows(r => r.filter(x => x.id!==id));
+  const setCell = (rowId, colId, val) => setRows(r => r.map(row => row.id===rowId ? {...row,[colId]:val} : row));
+
   // ═══════════════════════════════════════════════════════════════════════════
   // ── PIN gate screen ────────────────────────────────────────────────────
   if (wantsBuilder && !pinUnlocked) {

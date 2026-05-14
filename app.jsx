@@ -223,11 +223,18 @@ function DesignApproval() {
     return `${base}?order=${encoded}`;
   };
 
-  const copyLink = () => {
-    navigator.clipboard.writeText(generateLink()).then(() => {
-      setLinkCopied(true);
-      setTimeout(() => setLinkCopied(false), 3000);
-    });
+  const copyLink = async () => {
+    const longUrl = generateLink();
+    try {
+      const res = await fetch(`https://tinyurl.com/api-create.php?url=${encodeURIComponent(longUrl)}`);
+      const shortUrl = await res.text();
+      await navigator.clipboard.writeText(shortUrl.trim());
+    } catch(e) {
+      // Fall back to long URL if TinyURL fails
+      await navigator.clipboard.writeText(longUrl);
+    }
+    setLinkCopied(true);
+    setTimeout(() => setLinkCopied(false), 3000);
   };
 
   // ── Column operations ─────────────────────────────────────────────────────
@@ -748,9 +755,57 @@ function DesignApproval() {
                 </div>
               ))}
             </div>
-            <button onClick={() => window.print()}
+            <button onClick={() => {
+              const w = window.open('', '_blank');
+              const tableHead = cols.map(c => `<th style="padding:8px 12px;background:#2C2E69;color:#fff;text-align:left;font-size:12px;letter-spacing:0.06em;border-right:1px solid #fff">${c.label.toUpperCase()}</th>`).join('');
+              const tableRows = rows.map((row, ri) => {
+                const cells = cols.map(col => `<td style="padding:9px 12px;border-bottom:1px solid #D8D9E8;border-right:1px solid #D8D9E8;font-size:13px;color:#1A1C3E">${row[col.id]||'—'}</td>`).join('');
+                return `<tr style="background:${ri%2===0?'#fff':'#F7F8FB'}">${cells}</tr>`;
+              }).join('');
+              const totalRow = cols.some(c => sumCols.has(c.id)) ? `<tr style="background:#EEEEF5"><td colspan="${cols.length}" style="padding:8px 12px;font-size:12px;color:#8A8CAE;font-weight:600">` + cols.map(c => sumCols.has(c.id) ? `${c.label}: <strong style="color:#2C2E69">${colTotals[c.id]}</strong>` : '').filter(Boolean).join(' &nbsp;|&nbsp; ') + `</td></tr>` : '';
+              w.document.write(`<!DOCTYPE html><html><head><title>TallyKey Order Confirmation — ${orderRef}</title><style>*{box-sizing:border-box}body{font-family:'Trebuchet MS',sans-serif;margin:0;padding:0;color:#1A1C3E}@media print{.no-print{display:none}}</style></head><body>
+                <div style="background:#2C2E69;padding:20px 32px;display:flex;justify-content:space-between;align-items:center">
+                  <div style="color:#fff;font-size:22px;font-weight:700">tallykey<sup style="font-size:11px">®</sup></div>
+                  <div style="text-align:right"><div style="font-size:10px;color:rgba(255,255,255,0.5);letter-spacing:0.12em">ORDER CONFIRMATION</div><div style="font-size:14px;color:#F5A623;font-weight:700">${orderRef}</div></div>
+                </div>
+                <div style="padding:24px 32px">
+                  <table style="width:100%;border-collapse:collapse;margin-bottom:8px"><tr>
+                    <td style="font-size:13px;color:#8A8CAE">Customer</td><td style="font-size:14px;font-weight:600">${customer}</td>
+                    <td style="font-size:13px;color:#8A8CAE">Contact</td><td style="font-size:14px;font-weight:600">${contactName}</td>
+                  </tr><tr>
+                    <td style="font-size:13px;color:#8A8CAE;padding-top:6px">Date</td><td style="font-size:14px">${timestamp}</td>
+                    <td style="font-size:13px;color:#8A8CAE;padding-top:6px">Ref</td><td style="font-size:14px">${orderRef}</td>
+                  </tr></table>
+                  <hr style="border:none;border-top:1px solid #D8D9E8;margin:16px 0"/>
+                  <div style="font-size:11px;font-weight:700;color:#2C2E69;letter-spacing:0.1em;margin-bottom:10px">PEDESTAL CONFIGURATION</div>
+                  <table style="width:100%;border-collapse:collapse;border:1px solid #D8D9E8;border-radius:4px;overflow:hidden">
+                    <thead><tr>${tableHead}</tr></thead>
+                    <tbody>${tableRows}${totalRow}</tbody>
+                  </table>
+                  ${delivery ? `<div style="margin-top:20px"><div style="font-size:11px;font-weight:700;color:#2C2E69;letter-spacing:0.1em;margin-bottom:8px">DELIVERY DETAILS</div><div style="font-size:13px;color:#4A4C6E;line-height:1.7;white-space:pre-wrap">${delivery}</div></div>` : ''}
+                  ${notes ? `<div style="margin-top:20px"><div style="font-size:11px;font-weight:700;color:#2C2E69;letter-spacing:0.1em;margin-bottom:8px">ADDITIONAL NOTES</div><div style="font-size:13px;color:#4A4C6E;line-height:1.7;white-space:pre-wrap">${notes}</div></div>` : ''}
+                  <hr style="border:none;border-top:1px solid #D8D9E8;margin:20px 0"/>
+                  <div style="font-size:11px;font-weight:700;color:#2C2E69;letter-spacing:0.1em;margin-bottom:10px">SIGN-OFF DETAILS</div>
+                  <table style="width:100%;border-collapse:collapse">
+                    <tr><td style="font-size:13px;color:#8A8CAE;padding:5px 0;width:140px">Approved by</td><td style="font-size:13px;font-weight:600">${name}${jobTitle ? ' — '+jobTitle : ''}</td></tr>
+                    <tr><td style="font-size:13px;color:#8A8CAE;padding:5px 0">Email</td><td style="font-size:13px">${email}</td></tr>
+                    <tr><td style="font-size:13px;color:#8A8CAE;padding:5px 0">Timestamp</td><td style="font-size:13px">${timestamp}</td></tr>
+                  </table>
+                  <div style="margin-top:16px;padding:14px 16px;background:#F7F8FB;border:1px solid #D8D9E8;border-radius:4px;font-size:11px;color:#4A4C6E;line-height:1.7">
+                    I confirm that the pedestal configuration and other information detailed above is correct and I accept the supply of credit by Marathon Products Limited. I have read and understand the terms and conditions of Marathon Products and agree to be bound by these conditions. A copy is available to view at www.tallykey.co.nz/terms. I authorise the use of personal information as detailed in the privacy act clause therein.
+                  </div>
+                  <div style="margin-top:32px;padding-top:16px;border-top:1px solid #D8D9E8;font-size:11px;color:#8A8CAE;text-align:center">
+                    Marathon Products Limited &nbsp;·&nbsp; sales@tallykey.co.nz &nbsp;·&nbsp; 0800 82 55 95 &nbsp;·&nbsp; www.tallykey.co.nz
+                  </div>
+                </div>
+                <div class="no-print" style="padding:16px 32px;background:#EEEEF5;text-align:center">
+                  <button onclick="window.print()" style="padding:10px 28px;background:#2C2E69;color:#fff;border:none;border-radius:6px;font-size:14px;font-weight:600;cursor:pointer">🖨️ Print / Save as PDF</button>
+                </div>
+              </body></html>`);
+              w.document.close();
+            }}
               style={{ width:"100%", padding:"14px 20px", background:"#fff", color:brand.navy, border:`1.5px solid ${brand.border}`, borderRadius:6, fontSize:14, fontWeight:600, cursor:"pointer", marginBottom:16, display:"flex", alignItems:"center", justifyContent:"center", gap:10 }}>
-              <span>🖨️</span> Download / Print Confirmation
+              <span>🖨️</span> Download / Print Full Confirmation
             </button>
             <div style={{ background:brand.blueLight, border:`1px solid ${brand.border}`, borderRadius:6, padding:"16px 20px", display:"flex", gap:14, alignItems:"flex-start", textAlign:"left" }}>
               <span style={{ fontSize:18 }}>📧</span>

@@ -4,6 +4,90 @@ const SUBMIT_URL  = window.SUBMIT_URL  || "";
 
 const { useState, useRef, useEffect } = React;
 
+// Build the printable HTML used for both the on-screen "Print Full Confirmation"
+// button and the PDF attachment sent to sales@tallykey.co.nz.
+function buildConfirmationHTML({ orderRef, customer, contactName, name, jobTitle, email, ts, cols, rows, sumCols, colTotals, delivery, notes }) {
+  const tableHead = cols.map(c => `<th style="padding:8px 12px;background:#2C2E69;color:#fff;text-align:left;font-size:12px;letter-spacing:0.06em;border-right:1px solid #fff">${c.label.toUpperCase()}</th>`).join('');
+  const tableRows = rows.map((row, ri) => {
+    const cells = cols.map(col => `<td style="padding:9px 12px;border-bottom:1px solid #D8D9E8;border-right:1px solid #D8D9E8;font-size:13px;color:#1A1C3E">${row[col.id]||'—'}</td>`).join('');
+    return `<tr style="background:${ri%2===0?'#fff':'#F7F8FB'}">${cells}</tr>`;
+  }).join('');
+  const totalRow = cols.some(c => sumCols.has(c.id))
+    ? `<tr style="background:#EEEEF5"><td colspan="${cols.length}" style="padding:8px 12px;font-size:12px;color:#8A8CAE;font-weight:600">` +
+      cols.map(c => sumCols.has(c.id) ? `${c.label}: <strong style="color:#2C2E69">${colTotals[c.id]}</strong>` : '').filter(Boolean).join(' &nbsp;|&nbsp; ') +
+      `</td></tr>`
+    : '';
+  return `<div style="font-family:'Trebuchet MS',sans-serif;color:#1A1C3E;background:#fff">
+    <div style="background:#2C2E69;padding:20px 32px;display:flex;justify-content:space-between;align-items:center">
+      <div style="color:#fff;font-size:22px;font-weight:700">tallykey<sup style="font-size:11px">&reg;</sup></div>
+      <div style="text-align:right"><div style="font-size:10px;color:rgba(255,255,255,0.5);letter-spacing:0.12em">ORDER CONFIRMATION</div><div style="font-size:14px;color:#F5A623;font-weight:700">${orderRef}</div></div>
+    </div>
+    <div style="padding:24px 32px">
+      <table style="width:100%;border-collapse:collapse;margin-bottom:8px"><tr>
+        <td style="font-size:13px;color:#8A8CAE">Customer</td><td style="font-size:14px;font-weight:600">${customer}</td>
+        <td style="font-size:13px;color:#8A8CAE">Contact</td><td style="font-size:14px;font-weight:600">${contactName}</td>
+      </tr><tr>
+        <td style="font-size:13px;color:#8A8CAE;padding-top:6px">Date</td><td style="font-size:14px">${ts}</td>
+        <td style="font-size:13px;color:#8A8CAE;padding-top:6px">Ref</td><td style="font-size:14px">${orderRef}</td>
+      </tr></table>
+      <hr style="border:none;border-top:1px solid #D8D9E8;margin:16px 0"/>
+      <div style="font-size:11px;font-weight:700;color:#2C2E69;letter-spacing:0.1em;margin-bottom:10px">PEDESTAL CONFIGURATION</div>
+      <table style="width:100%;border-collapse:collapse;border:1px solid #D8D9E8;border-radius:4px;overflow:hidden">
+        <thead><tr>${tableHead}</tr></thead>
+        <tbody>${tableRows}${totalRow}</tbody>
+      </table>
+      ${delivery ? `<div style="margin-top:20px"><div style="font-size:11px;font-weight:700;color:#2C2E69;letter-spacing:0.1em;margin-bottom:8px">DELIVERY DETAILS</div><div style="font-size:13px;color:#4A4C6E;line-height:1.7;white-space:pre-wrap">${delivery}</div></div>` : ''}
+      ${notes ? `<div style="margin-top:20px"><div style="font-size:11px;font-weight:700;color:#2C2E69;letter-spacing:0.1em;margin-bottom:8px">ADDITIONAL NOTES</div><div style="font-size:13px;color:#4A4C6E;line-height:1.7;white-space:pre-wrap">${notes}</div></div>` : ''}
+      <hr style="border:none;border-top:1px solid #D8D9E8;margin:20px 0"/>
+      <div style="font-size:11px;font-weight:700;color:#2C2E69;letter-spacing:0.1em;margin-bottom:10px">SIGN-OFF DETAILS</div>
+      <table style="width:100%;border-collapse:collapse">
+        <tr><td style="font-size:13px;color:#8A8CAE;padding:5px 0;width:140px">Approved by</td><td style="font-size:13px;font-weight:600">${name}${jobTitle ? ' &mdash; '+jobTitle : ''}</td></tr>
+        <tr><td style="font-size:13px;color:#8A8CAE;padding:5px 0">Email</td><td style="font-size:13px">${email}</td></tr>
+        <tr><td style="font-size:13px;color:#8A8CAE;padding:5px 0">Timestamp</td><td style="font-size:13px">${ts}</td></tr>
+      </table>
+      <div style="margin-top:16px;padding:14px 16px;background:#F7F8FB;border:1px solid #D8D9E8;border-radius:4px;font-size:11px;color:#4A4C6E;line-height:1.7">
+        I confirm that the pedestal configuration and other information detailed above is correct and I accept the supply of credit by Marathon Products Limited. I have read and understand the terms and conditions of Marathon Products and agree to be bound by these conditions. A copy is available to view at www.tallykey.co.nz/terms. I authorise the use of personal information as detailed in the privacy act clause therein.
+      </div>
+      <div style="margin-top:32px;padding-top:16px;border-top:1px solid #D8D9E8;font-size:11px;color:#8A8CAE;text-align:center">
+        Marathon Products Limited &nbsp;&middot;&nbsp; sales@tallykey.co.nz &nbsp;&middot;&nbsp; 0800 82 55 95 &nbsp;&middot;&nbsp; www.tallykey.co.nz
+      </div>
+    </div>
+  </div>`;
+}
+
+// Render the confirmation HTML off-screen and convert to a base64 PDF string
+// using html2pdf.js (loaded via CDN in index.html). Resolves to "" on failure.
+async function generatePdfBase64(args) {
+  if (typeof html2pdf === "undefined") {
+    console.warn("html2pdf not loaded");
+    return "";
+  }
+  const wrapper = document.createElement("div");
+  wrapper.innerHTML = buildConfirmationHTML(args);
+  wrapper.style.cssText = "position:fixed;left:-10000px;top:0;width:794px;background:#fff;";
+  document.body.appendChild(wrapper);
+  try {
+    const opt = {
+      margin: 0,
+      filename: `TallyKey-${args.orderRef || "order"}.pdf`,
+      image: { type: "jpeg", quality: 0.95 },
+      html2canvas: { scale: 2, useCORS: true, backgroundColor: "#ffffff" },
+      jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
+    };
+    const pdfBlob = await html2pdf().set(opt).from(wrapper.firstElementChild).output("blob");
+    const dataUrl = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(pdfBlob);
+    });
+    // dataUrl is like "data:application/pdf;base64,JVBERi0..." — strip the prefix.
+    return dataUrl.split(",")[1] || "";
+  } finally {
+    document.body.removeChild(wrapper);
+  }
+}
+
 const brand = {
   blue:      "#2C2E69",   // TallyKey brand navy (sampled from website header)
   blueDark:  "#1E2050",   // Hover / active state
@@ -217,6 +301,18 @@ function DesignApproval() {
     if (!hasDrawn)    { setError("Please draw your signature in the box above."); return; }
     setSubmitting(true);
     const ts = new Date().toLocaleString("en-NZ", { timeZone:"Pacific/Auckland", dateStyle:"long", timeStyle:"short" });
+
+    // Generate PDF of the confirmation client-side before submitting.
+    let pdfBase64 = "";
+    try {
+      pdfBase64 = await generatePdfBase64({
+        orderRef, customer, contactName, name, jobTitle, email, ts,
+        cols, rows, sumCols, colTotals, delivery, notes,
+      });
+    } catch (e) {
+      console.error("PDF generation failed:", e);
+    }
+
     if (SUBMIT_URL) {
       try {
         const res = await fetch(SUBMIT_URL, {
@@ -234,6 +330,7 @@ function DesignApproval() {
             rows: rows.map(r => cols.map(c => r[c.id] || "")),
             notes,
             delivery,
+            pdfBase64,
           }),
         });
         if (!res.ok) {

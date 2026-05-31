@@ -50,8 +50,8 @@ function buildConfirmationHTML({ orderRef, customer, contactName, name, jobTitle
       </div>
       ${signatureDataUrl ? `<div style="margin-top:20px">
         <div style="font-size:11px;font-weight:700;color:#2C2E69;letter-spacing:0.1em;margin-bottom:8px">SIGNATURE</div>
-        <div style="border:1px solid #D8D9E8;border-radius:4px;padding:10px;background:#fff;display:inline-block;max-width:100%">
-          <img src="${signatureDataUrl}" alt="Signature" style="display:block;max-width:360px;height:auto"/>
+        <div style="border:1px solid #D8D9E8;border-radius:4px;padding:10px;background:#fff;width:380px;max-width:100%;">
+          <img src="${signatureDataUrl}" alt="Signature" width="360" height="73" crossorigin="anonymous" style="display:block;width:360px;height:auto;border:0;outline:0;"/>
         </div>
       </div>` : ''}
       <div style="margin-top:32px;padding-top:16px;border-top:1px solid #D8D9E8;font-size:11px;color:#8A8CAE;text-align:center">
@@ -72,12 +72,25 @@ async function generatePdfBase64(args) {
   wrapper.innerHTML = buildConfirmationHTML(args);
   wrapper.style.cssText = "position:fixed;left:-10000px;top:0;width:794px;background:#fff;";
   document.body.appendChild(wrapper);
+  // Wait for any <img> tags inside the wrapper (including signature data-URL)
+  // to fully decode before html2canvas snapshots the DOM. Without this the
+  // signature can render as a blank box.
+  const imgs = wrapper.querySelectorAll("img");
+  await Promise.all(Array.from(imgs).map(img => {
+    if (img.complete && img.naturalWidth > 0) return Promise.resolve();
+    return new Promise(resolve => {
+      img.onload = () => resolve();
+      img.onerror = () => resolve();
+    });
+  }));
   try {
     const opt = {
       margin: 0,
       filename: `TallyKey-${args.orderRef || "order"}.pdf`,
       image: { type: "jpeg", quality: 0.95 },
-      html2canvas: { scale: 2, useCORS: true, backgroundColor: "#ffffff" },
+      // allowTaint lets html2canvas paint data-URL images directly. useCORS
+      // off because we have no cross-origin images here.
+      html2canvas: { scale: 2, useCORS: false, allowTaint: true, backgroundColor: "#ffffff", logging: false },
       jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
     };
     // outputPdf('datauristring') is the most reliable html2pdf method —
@@ -312,6 +325,7 @@ function DesignApproval() {
     try {
       if (canvasRef.current) {
         signatureDataUrl = canvasRef.current.toDataURL("image/png");
+        console.log("Signature captured, data URL length:", signatureDataUrl.length);
       }
     } catch (e) {
       console.error("Signature capture failed:", e);

@@ -6,7 +6,7 @@ const { useState, useRef, useEffect } = React;
 
 // Build the printable HTML used for both the on-screen "Print Full Confirmation"
 // button and the PDF attachment sent to sales@tallykey.co.nz.
-function buildConfirmationHTML({ orderRef, customer, contactName, name, jobTitle, email, ts, cols, rows, sumCols, colTotals, delivery, notes }) {
+function buildConfirmationHTML({ orderRef, customer, contactName, name, jobTitle, email, ts, cols, rows, sumCols, colTotals, delivery, notes, signatureDataUrl }) {
   const tableHead = cols.map(c => `<th style="padding:8px 12px;background:#2C2E69;color:#fff;text-align:left;font-size:12px;letter-spacing:0.06em;border-right:1px solid #fff">${c.label.toUpperCase()}</th>`).join('');
   const tableRows = rows.map((row, ri) => {
     const cells = cols.map(col => `<td style="padding:9px 12px;border-bottom:1px solid #D8D9E8;border-right:1px solid #D8D9E8;font-size:13px;color:#1A1C3E">${row[col.id]||'—'}</td>`).join('');
@@ -48,6 +48,12 @@ function buildConfirmationHTML({ orderRef, customer, contactName, name, jobTitle
       <div style="margin-top:16px;padding:14px 16px;background:#F7F8FB;border:1px solid #D8D9E8;border-radius:4px;font-size:11px;color:#4A4C6E;line-height:1.7">
         I confirm that the pedestal configuration and other information detailed above is correct and I accept the supply of credit by Marathon Products Limited. I have read and understand the terms and conditions of Marathon Products and agree to be bound by these conditions. A copy is available to view at www.tallykey.co.nz/terms. I authorise the use of personal information as detailed in the privacy act clause therein.
       </div>
+      ${signatureDataUrl ? `<div style="margin-top:20px">
+        <div style="font-size:11px;font-weight:700;color:#2C2E69;letter-spacing:0.1em;margin-bottom:8px">SIGNATURE</div>
+        <div style="border:1px solid #D8D9E8;border-radius:4px;padding:10px;background:#fff;display:inline-block;max-width:100%">
+          <img src="${signatureDataUrl}" alt="Signature" style="display:block;max-width:360px;height:auto"/>
+        </div>
+      </div>` : ''}
       <div style="margin-top:32px;padding-top:16px;border-top:1px solid #D8D9E8;font-size:11px;color:#8A8CAE;text-align:center">
         Marathon Products Limited &nbsp;&middot;&nbsp; sales@tallykey.co.nz &nbsp;&middot;&nbsp; 0800 82 55 95 &nbsp;&middot;&nbsp; www.tallykey.co.nz
       </div>
@@ -301,12 +307,22 @@ function DesignApproval() {
     setSubmitting(true);
     const ts = new Date().toLocaleString("en-NZ", { timeZone:"Pacific/Auckland", dateStyle:"long", timeStyle:"short" });
 
+    // Capture the signature canvas as a PNG data URL so the PDF can show it.
+    let signatureDataUrl = "";
+    try {
+      if (canvasRef.current) {
+        signatureDataUrl = canvasRef.current.toDataURL("image/png");
+      }
+    } catch (e) {
+      console.error("Signature capture failed:", e);
+    }
+
     // Generate PDF of the confirmation client-side before submitting.
     let pdfBase64 = "";
     try {
       pdfBase64 = await generatePdfBase64({
         orderRef, customer, contactName, name, jobTitle, email, ts,
-        cols, rows, sumCols, colTotals, delivery, notes,
+        cols, rows, sumCols, colTotals, delivery, notes, signatureDataUrl,
       });
     } catch (e) {
       console.error("PDF generation failed:", e);

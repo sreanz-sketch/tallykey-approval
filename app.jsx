@@ -75,14 +75,16 @@ async function generatePdfBase64(args) {
       jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
     };
     const pdfBlob = await html2pdf().set(opt).from(wrapper.firstElementChild).output("blob");
-    const dataUrl = await new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onloadend = () => resolve(reader.result);
-      reader.onerror = reject;
-      reader.readAsDataURL(pdfBlob);
-    });
-    // dataUrl is like "data:application/pdf;base64,JVBERi0..." — strip the prefix.
-    return dataUrl.split(",")[1] || "";
+    // Encode blob -> ArrayBuffer -> base64 directly. Avoids FileReader quirks
+    // (line breaks / data-URL prefixes) that can corrupt the attachment.
+    const arrayBuffer = await pdfBlob.arrayBuffer();
+    const bytes = new Uint8Array(arrayBuffer);
+    let binary = "";
+    const chunkSize = 0x8000;
+    for (let i = 0; i < bytes.length; i += chunkSize) {
+      binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunkSize));
+    }
+    return btoa(binary);
   } finally {
     document.body.removeChild(wrapper);
   }

@@ -1,7 +1,6 @@
 // Config — edit these values directly
-const BUILDER_PIN   = window.BUILDER_PIN   || "1234";
-const FORMSPREE_ID  = window.FORMSPREE_ID  || "";
-const FORMSPREE_URL = FORMSPREE_ID ? `https://formspree.io/f/${FORMSPREE_ID}` : "";
+const BUILDER_PIN = window.BUILDER_PIN || "1234";
+const SUBMIT_URL  = window.SUBMIT_URL  || "";
 
 const { useState, useRef, useEffect } = React;
 
@@ -218,34 +217,32 @@ function DesignApproval() {
     if (!hasDrawn)    { setError("Please draw your signature in the box above."); return; }
     setSubmitting(true);
     const ts = new Date().toLocaleString("en-NZ", { timeZone:"Pacific/Auckland", dateStyle:"long", timeStyle:"short" });
-    if (FORMSPREE_URL) {
+    if (SUBMIT_URL) {
       try {
-        // Build one field per pedestal row so Formspree displays them cleanly
-        const rowFields = {};
-        rows.forEach((row, ri) => {
-          const label = `Pedestal ${ri + 1}`;
-          const value = cols.map(col => `${col.label}: ${row[col.id] || '—'}`).join('  |  ');
-          rowFields[label] = value;
-        });
-
-        await fetch(FORMSPREE_URL, {
+        const res = await fetch(SUBMIT_URL, {
           method: "POST",
-          headers: { "Accept": "application/json", "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            _subject: `TallyKey Sign-off: ${orderRef} — ${customer}`,
-            "Order Reference":  orderRef,
-            "Company":          customer,
-            "Contact Name":     contactName,
-            "Approved By":      `${name}${jobTitle ? ' — ' + jobTitle : ''}`,
-            "Email":            email,
-            "Submitted":        ts,
-            ...rowFields,
-            "Delivery Details": delivery || "—",
-            "Additional Notes": notes || "—",
-            "Sign-off":         "Customer confirmed configuration is correct and accepted T&C at www.tallykey.co.nz/terms",
+            orderRef,
+            customer,
+            contactName,
+            email,
+            approvedBy: name,
+            jobTitle,
+            timestamp: new Date().toISOString(),
+            cols: cols.map(c => c.label),
+            rows: rows.map(r => cols.map(c => r[c.id] || "")),
+            notes,
+            delivery,
           }),
         });
-      } catch (_) { /* fail silently */ }
+        if (!res.ok) {
+          const errText = await res.text();
+          console.error("Submit failed:", res.status, errText);
+        }
+      } catch (e) {
+        console.error("Submit error:", e);
+      }
     }
     setTimestamp(ts);
     setSubmitting(false);

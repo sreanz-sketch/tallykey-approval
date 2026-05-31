@@ -74,17 +74,14 @@ async function generatePdfBase64(args) {
       html2canvas: { scale: 2, useCORS: true, backgroundColor: "#ffffff" },
       jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
     };
-    const pdfBlob = await html2pdf().set(opt).from(wrapper.firstElementChild).output("blob");
-    // Encode blob -> ArrayBuffer -> base64 directly. Avoids FileReader quirks
-    // (line breaks / data-URL prefixes) that can corrupt the attachment.
-    const arrayBuffer = await pdfBlob.arrayBuffer();
-    const bytes = new Uint8Array(arrayBuffer);
-    let binary = "";
-    const chunkSize = 0x8000;
-    for (let i = 0; i < bytes.length; i += chunkSize) {
-      binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunkSize));
-    }
-    return btoa(binary);
+    // outputPdf('datauristring') is the most reliable html2pdf method —
+    // returns a single string like "data:application/pdf;base64,JVBERi0..."
+    // which we split to get the bare base64 content.
+    const dataUri = await html2pdf().set(opt).from(wrapper.firstElementChild).outputPdf("datauristring");
+    const commaIdx = dataUri.indexOf(",");
+    const base64 = commaIdx >= 0 ? dataUri.substring(commaIdx + 1) : "";
+    console.log("PDF generated, base64 length:", base64.length, "first chars:", base64.substring(0, 20));
+    return base64;
   } finally {
     document.body.removeChild(wrapper);
   }

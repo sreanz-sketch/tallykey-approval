@@ -285,6 +285,49 @@ function DesignApproval() {
   const canvasRef = useRef(null);
   const lastPos   = useRef(null);
 
+  // ── Short-URL loader ─────────────────────────────────────────────────────
+  // If the page was opened with ?c=slug, fetch the order data from the Worker
+  // KV store and populate state. Runs once on mount.
+  const [slugLoading, setSlugLoading] = useState(() => {
+    const slug = urlParams.get("c");
+    return !!(slug && SUBMIT_URL);
+  });
+  const [slugError, setSlugError] = useState("");
+  useEffect(() => {
+    const slug = urlParams.get("c");
+    if (!slug || !SUBMIT_URL) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`${SUBMIT_URL}/load/${encodeURIComponent(slug)}`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        if (cancelled) return;
+        setOrderRef(data.r || "");
+        setCustomer(data.cu || "");
+        setContactName(data.cn || "");
+        setNotes(data.n || "");
+        setDelivery(data.d || "");
+        if (Array.isArray(data.rw)) {
+          const builtRows = data.rw.map((vals, ri) => {
+            const row = { id: `r${ri + 1}` };
+            INIT_COLS.forEach((col, ci) => { row[col.id] = vals[ci] || ""; });
+            return row;
+          });
+          setRows(builtRows);
+        }
+        setSlugLoading(false);
+      } catch (e) {
+        if (cancelled) return;
+        console.error("Slug load failed:", e);
+        setSlugError("This order link could not be loaded. Please contact sales@tallykey.co.nz.");
+        setSlugLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   useEffect(() => {
     if (step === 2) {
       setTimeout(() => {
@@ -382,8 +425,8 @@ function DesignApproval() {
 
   const resetPreview = () => { setMode("preview"); setStep(1); setName(""); setJobTitle(""); setChecked(false); setHasDrawn(false); setError(""); };
 
-  const generateLink = () => {
-    // Only encode the data that changes per order — not the fixed column structure
+  const generateLink = async () => {
+    // Only encode the data that changes per order — not the fixed column structure.
     const data = {
       r: orderRef,
       cu: customer,
@@ -393,16 +436,40 @@ function DesignApproval() {
       // Rows as arrays of values (in col order) to minimise size
       rw: rows.map(row => cols.map(col => row[col.id] || "")),
     };
-    const encoded = btoa(unescape(encodeURIComponent(JSON.stringify(data))));
     const base = window.location.origin + window.location.pathname;
+
+    // Prefer the short ?c=slug form by POSTing to the Worker's /save endpoint.
+    // Falls back to the legacy ?o=base64 form if save fails (offline, etc.).
+    if (SUBMIT_URL) {
+      try {
+        const res = await fetch(SUBMIT_URL + "/save", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(data),
+        });
+        if (res.ok) {
+          const out = await res.json();
+          if (out && out.slug) return `${base}?c=${out.slug}`;
+        } else {
+          console.warn("Save failed, falling back to long URL:", res.status);
+        }
+      } catch (e) {
+        console.warn("Save error, falling back to long URL:", e);
+      }
+    }
+    const encoded = btoa(unescape(encodeURIComponent(JSON.stringify(data))));
     return `${base}?o=${encoded}`;
   };
 
-  const copyLink = () => {
-    navigator.clipboard.writeText(generateLink()).then(() => {
+  const copyLink = async () => {
+    try {
+      const link = await generateLink();
+      await navigator.clipboard.writeText(link);
       setLinkCopied(true);
       setTimeout(() => setLinkCopied(false), 3000);
-    });
+    } catch (e) {
+      console.error("Copy failed:", e);
+    }
   };
 
   // ── Column operations ─────────────────────────────────────────────────────
@@ -687,6 +754,28 @@ function DesignApproval() {
   // ═══════════════════════════════════════════════════════════════════════════
   // CUSTOMER APPROVAL FLOW
   // ═══════════════════════════════════════════════════════════════════════════
+  // Short-URL loading / error UIs — shown before the main flow if ?c=slug is present.
+  if (slugLoading) {
+    return (
+      <div style={{ minHeight:"100vh", background:brand.offWhite, display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"'Trebuchet MS','Gill Sans',sans-serif", color:brand.navy }}>
+        <div style={{ textAlign:"center" }}>
+          <div style={{ fontSize:14, color:brand.textMid, marginBottom:6 }}>Loading your order…</div>
+          <div style={{ fontSize:11, color:brand.textLight }}>tallykey</div>
+        </div>
+      </div>
+    );
+  }
+  if (slugError) {
+    return (
+      <div style={{ minHeight:"100vh", background:brand.offWhite, display:"flex", alignItems:"center", justifyContent:"center", padding:24, fontFamily:"'Trebuchet MS','Gill Sans',sans-serif", color:brand.navy }}>
+        <div style={{ maxWidth:420, textAlign:"center", background:"#fff", padding:"24px 28px", border:`1px solid ${brand.border}`, borderRadius:8 }}>
+          <div style={{ fontSize:16, fontWeight:700, marginBottom:8 }}>Order not available</div>
+          <div style={{ fontSize:13, color:brand.textMid, lineHeight:1.6 }}>{slugError}</div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div style={{ minHeight:"100vh", background:brand.offWhite, fontFamily:"'Trebuchet MS','Gill Sans',sans-serif", color:brand.navy }}>
 
